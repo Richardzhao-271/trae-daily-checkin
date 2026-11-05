@@ -1,0 +1,33 @@
+name: Trae daily check-in
+
+# 北京时间每天 08:30 自动签到（GitHub cron 用 UTC，0:30 UTC = 08:30 CST）
+# GitHub 的 schedule 不保证准点，通常延迟几分钟到几十分钟，偶尔会被跳过；
+# 签到本身幂等，晚到不影响积分到账，也可以在 Actions 页面手动触发。
+on:
+  schedule:
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trae-checkin
+  cancel-in-progress: false
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check in
+        env:
+          TRAE_TOKEN: ${{ secrets.TRAE_TOKEN }}
+          TRAE_DEVICE_ID: ${{ secrets.TRAE_DEVICE_ID }}
+        run: python scripts/trae_checkin.py
