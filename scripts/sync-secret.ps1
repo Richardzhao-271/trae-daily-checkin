@@ -85,9 +85,10 @@ $deviceId = if ($dcKey) { $dcKey.Substring("iCubeAuthInfo://icube-dc:".Length) }
 if (-not $deviceId) { Fail "未取到设备 ID，请启动一次 Trae 客户端后重试" }
 
 # ---------- 写入 GitHub Secrets ----------
-$token | & gh secret set $TokenSecretName --repo $Repo
+# 必须用 --body 传值：Windows PowerShell 5.1 下通过管道喂给 gh 会被写成空值
+& gh secret set $TokenSecretName --repo $Repo --body $token
 if ($LASTEXITCODE -ne 0) { Fail "写入 Secret $TokenSecretName 失败（检查仓库名与 gh 权限）" }
-$deviceId | & gh secret set $DeviceSecretName --repo $Repo
+& gh secret set $DeviceSecretName --repo $Repo --body $deviceId
 if ($LASTEXITCODE -ne 0) { Fail "写入 Secret $DeviceSecretName 失败（检查仓库名与 gh 权限）" }
 
 # ---------- 只报告结果，不输出任何凭据 ----------
