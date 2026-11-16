@@ -1,11 +1,12 @@
 name: Trae daily check-in
 
-# 北京时间每天 08:30 自动签到（GitHub cron 用 UTC，0:30 UTC = 08:30 CST）
+# 北京时间每天 08:30 与 20:30 各尝试一次（GitHub cron 用 UTC，0:30 / 12:30 UTC = 08:30 / 20:30 CST）
 # GitHub 的 schedule 不保证准点，通常延迟几分钟到几十分钟，偶尔会被跳过；
-# 签到本身幂等，晚到不影响积分到账，也可以在 Actions 页面手动触发。
+# 两次尝试 + 本机 token-keeper 补签可覆盖绝大多数漏签场景，签到本身幂等不会重复领取。
 on:
   schedule:
     - cron: "30 0 * * *"
+    - cron: "30 12 * * *"
   workflow_dispatch:
 
 permissions:
