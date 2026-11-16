@@ -53,6 +53,23 @@ if (-not $auth.ExpiresAt) {
 $hoursLeft = [math]::Round(($auth.ExpiresAt - (Get-Date)).TotalHours, 1)
 Write-TraeLog ("剩余有效期：{0} 小时" -f $hoursLeft)
 
+# ---------- 1.5 确保云端工作流处于启用状态 ----------
+# GitHub 在仓库长期无提交时会自动禁用定时工作流，这里顺手恢复
+$gh = Resolve-GhPath
+if ($gh) {
+    try {
+        $wfJson = & $gh workflow list --repo $Repo --json name,state 2>$null
+        $wf = ($wfJson | ConvertFrom-Json) | Where-Object { $_.name -eq "Trae daily check-in" } | Select-Object -First 1
+        if ($wf -and $wf.state -ne "active") {
+            Write-TraeLog "云端工作流状态为 $($wf.state)，尝试重新启用" "WARN"
+            $null = & $gh workflow enable trae-checkin.yml --repo $Repo 2>&1
+            if ($LASTEXITCODE -eq 0) { Write-TraeLog "云端工作流已重新启用" } else { Write-TraeLog "启用云端工作流失败" "WARN" }
+        }
+    } catch {
+        Write-TraeLog "检查云端工作流状态失败：$($_.Exception.Message)" "WARN"
+    }
+}
+
 # ---------- 2. 必要时续期 ----------
 $renewed = $false
 if ($hoursLeft -le $ExpiryWarningHours) {
