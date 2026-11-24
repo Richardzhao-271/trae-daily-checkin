@@ -10,6 +10,19 @@ Trae 的签到令牌（accessToken）**只有约 14 天有效期**。令牌过�
 
 现在的脚本会先在本地解析 JWT 的 `exp` 字段判过期，过期直接以退出码 2 失败，不再被 `enable=false` 掩盖。
 
+## 长期不开机为什么会中断
+
+accessToken 只有 **14 天**，而它只能由本机 Trae 客户端刷新。GitHub 云端虽然每天在跑，但拿到的是同一份
+Secrets，自己无法续期。所以：
+
+- **电脑连续不开机超过令牌剩余有效期** → 令牌过期 → 云端签到失败（会收到 GitHub 失败邮件）；
+- 再次开机登录时，守护任务会立刻检测到令牌已过期，启动 Trae 客户端完成续期、推送新 Secrets、
+  本机补签并触发一次云端签到验证，链路自动恢复；
+- 这段时间里漏掉的签到无法补回（签到按天幂等，不可追溯）。
+
+因此"完全不开机"的极限就是令牌剩余有效期（最多 14 天）。要长期挂机，建议每隔一两周开机登录一次，
+或把守护任务放在一台常开的机器上。
+
 ## 整体结构
 
 ```
@@ -19,15 +32,16 @@ GitHub Actions（云端，无需开机）
         │
         │  开机时自动推送新令牌
         │
-本机 token-keeper.ps1（Windows 计划任务，每 30 分钟）
+本机 token-keeper.ps1（Windows 计划任务，每 15 分钟）
   ├─ 读取并解密 Trae 客户端登录态（storage.json）
-  ├─ 令牌剩余 < 48 小时 → 启动/等待 Trae 客户端自动续期
+  ├─ 令牌剩余 < 72 小时 → 启动 Trae 并等待客户端续期（最长 20 分钟）
   ├─ 令牌变化 → 推送到 GitHub Secrets
   ├─ 本机直接补签（GitHub 定时被跳过时兜底）
   └─ 续期成功后触发一次云端签到，验证链路恢复
 ```
 
 令牌续期由 Trae 客户端自己完成（refreshToken 有效期约 6 个月），本方案只负责"发现快过期 → 保证客户端在跑 → 把新令牌同步上去"。
+计划任务的触发方式是**登录时立即一次 + 此后每 15 分钟一次**，所以"到期后第一次开机"无需人工干预。
 
 ## 首次安装（只需一次）
 
@@ -39,7 +53,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install-keeper.ps1 -Repo "你�
 ```
 
 脚本会把运行文件复制到 `%LOCALAPPDATA%\TraeCheckinKeeper\scripts`，并注册计划任务 `TraeCheckinKeeper`
-（登录时执行一次，之后每 30 分钟一次；仅在开机登录状态下运行，错过的时段开机后会补跑）。
+（登录时执行一次，之后每 15 分钟一次；仅在开机登录状态下运行，错过的时段开机后会补跑）。
 
 3. 立即验证一次：
 
@@ -72,8 +86,8 @@ gh run list --repo 你的用户名/trae-daily-checkin --limit 10
 | 脚本 | 参数 | 说明 |
 | --- | --- | --- |
 | token-keeper.ps1 | `-Force` | 令牌未变化也强制重新推送 Secrets |
-| token-keeper.ps1 | `-ExpiryWarningHours 72` | 提前多久开始尝试续期（默认 48 小时） |
-| token-keeper.ps1 | `-RenewWaitMinutes 20` | 等待客户端续期的最长时间（默认 10 分钟） |
+| token-keeper.ps1 | `-ExpiryWarningHours 72` | 提前多久开始尝试续期（默认 72 小时） |
+| token-keeper.ps1 | `-RenewWaitMinutes 20` | 等待客户端续期的最长时间（默认 20 分钟） |
 | token-keeper.ps1 | `-NoLocalFallback` | 不做本机补签，只同步令牌 |
 | token-keeper.ps1 | `-NoDispatch` | 续期后不触发云端验证 |
 | install-keeper.ps1 | `-Uninstall` | 删除计划任务 |

@@ -15,8 +15,8 @@
 
 param(
     [string]$Repo = "Richardzhao-271/trae-daily-checkin",
-    [int]$ExpiryWarningHours = 48,
-    [int]$RenewWaitMinutes = 10,
+    [int]$ExpiryWarningHours = 72,
+    [int]$RenewWaitMinutes = 20,
     [switch]$Force,
     [switch]$NoLocalFallback,
     [switch]$NoDispatch,
@@ -50,8 +50,27 @@ if (-not $auth.ExpiresAt) {
     exit 2
 }
 
-$hoursLeft = [math]::Round(($auth.ExpiresAt - (Get-Date)).TotalHours, 1)
+$now = Get-Date
+$hoursLeft = [math]::Round(($auth.ExpiresAt - $now).TotalHours, 1)
 Write-TraeLog ("剩余有效期：{0} 小时" -f $hoursLeft)
+
+# 开机恢复线索：两次运行间隔较大说明中间关机/未登录过
+if ($state.LastSeenAt) {
+    try {
+        $gapHours = ($now - [datetime]$state.LastSeenAt).TotalHours
+        if ($gapHours -ge 6) {
+            Write-TraeLog ("距上次运行 {0:N1} 小时，按开机恢复场景处理" -f $gapHours) "WARN"
+        }
+    } catch { }
+}
+
+# refreshToken 约 6 个月有效期，临近到期必须人工重新登录，提前提醒
+if ($auth.RefreshExpiresAt) {
+    $refreshDaysLeft = [math]::Round(($auth.RefreshExpiresAt - $now).TotalDays, 1)
+    if ($refreshDaysLeft -le 15) {
+        Write-TraeLog ("刷新令牌将在 {0} 天后过期，请找时间打开 Trae 客户端重新登录一次" -f $refreshDaysLeft) "WARN"
+    }
+}
 
 # ---------- 1.5 确保云端工作流处于启用状态 ----------
 # GitHub 在仓库长期无提交时会自动禁用定时工作流，这里顺手恢复
@@ -97,7 +116,7 @@ if ($hoursLeft -le $ExpiryWarningHours) {
     $oldToken = $auth.Token
     $deadline = (Get-Date).AddMinutes($RenewWaitMinutes)
     while ((Get-Date) -lt $deadline) {
-        Start-Sleep -Seconds 20
+        Start-Sleep -Seconds 15
         try { $fresh = Read-TraeAuth } catch { continue }
         if ($fresh.Token -ne $oldToken -and $fresh.ExpiresAt -gt (Get-Date)) {
             $auth = $fresh
@@ -112,7 +131,7 @@ if ($hoursLeft -le $ExpiryWarningHours) {
         if ((Get-Date) -lt $auth.ExpiresAt) {
             Write-TraeLog "客户端尚未触发续期，但当前令牌仍然有效，先同步现有令牌" "WARN"
         } else {
-            Write-TraeLog ("令牌已过期且 {0} 分钟内未完成自动续期。请打开 Trae 客户端停留几分钟，或重新登录" -f $RenewWaitMinutes) "ERROR"
+            Write-TraeLog ("令牌已过期且 {0} 分钟内未完成自动续期；Trae 保持运行，计划任务会继续自动重试。持续失败请在客户端重新登录" -f $RenewWaitMinutes) "ERROR"
             exit 2
         }
     }
@@ -195,6 +214,7 @@ if ($renewed -and $needSync -and -not $NoDispatch) {
 }
 
 $state.LastResult = if ($checkinOk) { "ok" } else { "unknown" }
+$state.LastSeenAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
 Save-TraeKeeperState -State $state -StateDir $StateDir
 Write-TraeLog "===== 检查结束 ====="
 exit 0

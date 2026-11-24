@@ -1,7 +1,7 @@
 ﻿# 安装 / 卸载 Trae 签到令牌守护任务（Windows 计划任务）
 #
 # 作用：把 token-keeper.ps1 及相关脚本复制到本机固定目录，并注册计划任务，
-#       在开机登录后每 30 分钟检查一次令牌状态；电脑关机期间不运行，开机后自动补跑。
+#       在开机登录后每 15 分钟检查一次令牌状态；电脑关机期间不运行，开机后自动补跑。
 #
 # 用法：
 #   powershell -ExecutionPolicy Bypass -File install-keeper.ps1 -Repo "用户名/仓库名"
@@ -9,7 +9,7 @@
 
 param(
     [string]$Repo = "Richardzhao-271/trae-daily-checkin",
-    [int]$IntervalMinutes = 30,
+    [int]$IntervalMinutes = 15,
     [switch]$Uninstall
 )
 
@@ -63,7 +63,7 @@ $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -MultipleInstances IgnoreNew `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 30) `
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 45) `
     -RestartCount 2 `
     -RestartInterval (New-TimeSpan -Minutes 5)
 
