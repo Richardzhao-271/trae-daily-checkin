@@ -214,7 +214,7 @@ if ($renewed -and $needSync -and -not $NoDispatch) {
 }
 
 $state.LastResult = if ($checkinOk) { "ok" } else { "unknown" }
-$state.LastSeenAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+$state | Add-Member -NotePropertyName LastSeenAt -NotePropertyValue (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") -Force
 Save-TraeKeeperState -State $state -StateDir $StateDir
 Write-TraeLog "===== 检查结束 ====="
 exit 0

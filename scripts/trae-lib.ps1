@@ -294,6 +294,7 @@ function Get-TraeKeeperState {
         LastSyncAt     = $null
         LastCheckinDay = $null
         LastResult     = $null
+        LastSeenAt     = $null
     }
 }
 
